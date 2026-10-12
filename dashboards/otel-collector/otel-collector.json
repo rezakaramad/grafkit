@@ -1,0 +1,353 @@
+{
+  "uid": "otel-collector",
+  "title": "OpenTelemetry Collectors",
+  "tags": [
+    "opentelemetry",
+    "collector"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "refresh": "30s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "ds_metrics",
+        "label": "Metrics",
+        "type": "datasource",
+        "query": "prometheus",
+        "refresh": 1,
+        "hide": 0,
+        "current": {}
+      },
+      {
+        "name": "cluster",
+        "label": "Cluster",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${ds_metrics}"
+        },
+        "query": {
+          "query": "label_values(otelcol_process_uptime, k8s_cluster_name)",
+          "refId": "cluster"
+        },
+        "refresh": 2,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        }
+      },
+      {
+        "name": "job",
+        "label": "Collector",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${ds_metrics}"
+        },
+        "query": {
+          "query": "label_values(otelcol_process_uptime{k8s_cluster_name=~\"$cluster\"}, job)",
+          "refId": "job"
+        },
+        "refresh": 2,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Received per second",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds_metrics}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "legendFormat": "{{job}} spans",
+          "expr": "sum by (job) (rate(otelcol_receiver_accepted_spans{k8s_cluster_name=~\"$cluster\", job=~\"$job\"}[$__rate_interval]))"
+        },
+        {
+          "refId": "B",
+          "legendFormat": "{{job}} log records",
+          "expr": "sum by (job) (rate(otelcol_receiver_accepted_log_records{k8s_cluster_name=~\"$cluster\", job=~\"$job\"}[$__rate_interval]))"
+        },
+        {
+          "refId": "C",
+          "legendFormat": "{{job}} metric points",
+          "expr": "sum by (job) (rate(otelcol_receiver_accepted_metric_points{k8s_cluster_name=~\"$cluster\", job=~\"$job\"}[$__rate_interval]))"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Refused or failed on receive per second",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds_metrics}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "legendFormat": "{{job}} refused spans",
+          "expr": "sum by (job) (rate(otelcol_receiver_refused_spans{k8s_cluster_name=~\"$cluster\", job=~\"$job\"}[$__rate_interval]))"
+        },
+        {
+          "refId": "B",
+          "legendFormat": "{{job}} refused log records",
+          "expr": "sum by (job) (rate(otelcol_receiver_refused_log_records{k8s_cluster_name=~\"$cluster\", job=~\"$job\"}[$__rate_interval]))"
+        },
+        {
+          "refId": "C",
+          "legendFormat": "{{job}} refused metric points",
+          "expr": "sum by (job) (rate(otelcol_receiver_refused_metric_points{k8s_cluster_name=~\"$cluster\", job=~\"$job\"}[$__rate_interval]))"
+        },
+        {
+          "refId": "D",
+          "legendFormat": "{{job}} failed spans",
+          "expr": "sum by (job) (rate(otelcol_receiver_failed_spans{k8s_cluster_name=~\"$cluster\", job=~\"$job\"}[$__rate_interval]))"
+        },
+        {
+          "refId": "E",
+          "legendFormat": "{{job}} failed log records",
+          "expr": "sum by (job) (rate(otelcol_receiver_failed_log_records{k8s_cluster_name=~\"$cluster\", job=~\"$job\"}[$__rate_interval]))"
+        },
+        {
+          "refId": "F",
+          "legendFormat": "{{job}} failed metric points",
+          "expr": "sum by (job) (rate(otelcol_receiver_failed_metric_points{k8s_cluster_name=~\"$cluster\", job=~\"$job\"}[$__rate_interval]))"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Exported per second",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds_metrics}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "legendFormat": "{{exporter}} spans",
+          "expr": "sum by (exporter) (rate(otelcol_exporter_sent_spans{k8s_cluster_name=~\"$cluster\", job=~\"$job\"}[$__rate_interval]))"
+        },
+        {
+          "refId": "B",
+          "legendFormat": "{{exporter}} log records",
+          "expr": "sum by (exporter) (rate(otelcol_exporter_sent_log_records{k8s_cluster_name=~\"$cluster\", job=~\"$job\"}[$__rate_interval]))"
+        },
+        {
+          "refId": "C",
+          "legendFormat": "{{exporter}} metric points",
+          "expr": "sum by (exporter) (rate(otelcol_exporter_sent_metric_points{k8s_cluster_name=~\"$cluster\", job=~\"$job\"}[$__rate_interval]))"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Export failures per second",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds_metrics}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "legendFormat": "{{exporter}} spans",
+          "expr": "sum by (exporter) (rate(otelcol_exporter_send_failed_spans{k8s_cluster_name=~\"$cluster\", job=~\"$job\"}[$__rate_interval]))"
+        },
+        {
+          "refId": "B",
+          "legendFormat": "{{exporter}} log records",
+          "expr": "sum by (exporter) (rate(otelcol_exporter_send_failed_log_records{k8s_cluster_name=~\"$cluster\", job=~\"$job\"}[$__rate_interval]))"
+        },
+        {
+          "refId": "C",
+          "legendFormat": "{{exporter}} metric points",
+          "expr": "sum by (exporter) (rate(otelcol_exporter_send_failed_metric_points{k8s_cluster_name=~\"$cluster\", job=~\"$job\"}[$__rate_interval]))"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Exporter queue utilisation",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds_metrics}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "legendFormat": "{{job}} {{exporter}}",
+          "expr": "max by (job, exporter) (otelcol_exporter_queue_size{k8s_cluster_name=~\"$cluster\", job=~\"$job\"}) / max by (job, exporter) (otelcol_exporter_queue_capacity{k8s_cluster_name=~\"$cluster\", job=~\"$job\"})"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Memory (RSS)",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds_metrics}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "legendFormat": "{{job}} {{k8s_pod_name}}",
+          "expr": "max by (job, k8s_pod_name) (otelcol_process_memory_rss{k8s_cluster_name=~\"$cluster\", job=~\"$job\"})"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "CPU (cores)",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 24
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds_metrics}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "legendFormat": "{{job}} {{k8s_pod_name}}",
+          "expr": "sum by (job, k8s_pod_name) (rate(otelcol_process_cpu_seconds{k8s_cluster_name=~\"$cluster\", job=~\"$job\"}[$__rate_interval]))"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Uptime",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 24
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds_metrics}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "legendFormat": "{{job}} {{k8s_pod_name}}",
+          "expr": "max by (job, k8s_pod_name) (otelcol_process_uptime{k8s_cluster_name=~\"$cluster\", job=~\"$job\"})"
+        }
+      ]
+    }
+  ]
+}

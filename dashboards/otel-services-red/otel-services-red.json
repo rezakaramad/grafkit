@@ -1,0 +1,296 @@
+{
+  "uid": "otel-services-red",
+  "title": "OpenTelemetry Services (RED)",
+  "tags": [
+    "opentelemetry",
+    "demo"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "refresh": "30s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "ds_metrics",
+        "label": "Metrics",
+        "type": "datasource",
+        "query": "prometheus",
+        "refresh": 1,
+        "hide": 0,
+        "current": {}
+      },
+      {
+        "name": "ds_logs",
+        "label": "Logs",
+        "type": "datasource",
+        "query": "loki",
+        "refresh": 1,
+        "hide": 0,
+        "current": {}
+      },
+      {
+        "name": "ds_traces",
+        "label": "Traces",
+        "type": "datasource",
+        "query": "tempo",
+        "refresh": 1,
+        "hide": 0,
+        "current": {}
+      },
+      {
+        "name": "namespace",
+        "label": "Namespace",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${ds_metrics}"
+        },
+        "query": {
+          "query": "label_values({__name__=~\"http_server_(request_)?duration_count\"}, k8s_namespace_name)",
+          "refId": "namespace"
+        },
+        "refresh": 2,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        }
+      },
+      {
+        "name": "cluster",
+        "label": "Cluster",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${ds_metrics}"
+        },
+        "query": {
+          "query": "label_values({__name__=~\"http_server_(request_)?duration_count\", k8s_namespace_name=~\"$namespace\"}, k8s_cluster_name)",
+          "refId": "cluster"
+        },
+        "refresh": 2,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        }
+      },
+      {
+        "name": "service",
+        "label": "Service",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${ds_metrics}"
+        },
+        "query": {
+          "query": "label_values({__name__=~\"http_server_(request_)?duration_count\", k8s_namespace_name=~\"$namespace\", k8s_cluster_name=~\"$cluster\"}, service_name)",
+          "refId": "service"
+        },
+        "refresh": 2,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Request rate",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds_metrics}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "legendFormat": "{{service_name}}",
+          "expr": "sum by (service_name) (rate(http_server_request_duration_count{k8s_namespace_name=~\"$namespace\", k8s_cluster_name=~\"$cluster\", service_name=~\"$service\"}[$__rate_interval]))"
+        },
+        {
+          "refId": "B",
+          "legendFormat": "{{service_name}} (older HTTP semconv)",
+          "expr": "sum by (service_name) (rate(http_server_duration_count{k8s_namespace_name=~\"$namespace\", k8s_cluster_name=~\"$cluster\", service_name=~\"$service\"}[$__rate_interval]))"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Server errors (5xx) per second",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds_metrics}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "legendFormat": "{{service_name}}",
+          "expr": "sum by (service_name) (rate(http_server_request_duration_count{k8s_namespace_name=~\"$namespace\", k8s_cluster_name=~\"$cluster\", service_name=~\"$service\", http_response_status_code=~\"5..\"}[$__rate_interval]))"
+        },
+        {
+          "refId": "B",
+          "legendFormat": "{{service_name}} (older HTTP semconv)",
+          "expr": "sum by (service_name) (rate(http_server_duration_count{k8s_namespace_name=~\"$namespace\", k8s_cluster_name=~\"$cluster\", service_name=~\"$service\", http_status_code=~\"5..\"}[$__rate_interval]))"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "p95 latency",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds_metrics}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "legendFormat": "{{service_name}}",
+          "expr": "histogram_quantile(0.95, sum by (le, service_name) (rate(http_server_request_duration_bucket{k8s_namespace_name=~\"$namespace\", k8s_cluster_name=~\"$cluster\", service_name=~\"$service\"}[$__rate_interval])))"
+        },
+        {
+          "refId": "B",
+          "legendFormat": "{{service_name}} (older HTTP semconv)",
+          "expr": "histogram_quantile(0.95, sum by (le, service_name) (rate(http_server_duration_bucket{k8s_namespace_name=~\"$namespace\", k8s_cluster_name=~\"$cluster\", service_name=~\"$service\"}[$__rate_interval]))) / 1000"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Log volume by level",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "${ds_logs}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "bars",
+            "stacking": {
+              "mode": "normal"
+            },
+            "fillOpacity": 60
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "legendFormat": "{{detected_level}}",
+          "expr": "sum by (detected_level) (count_over_time({k8s_namespace_name=~\"$namespace\", k8s_cluster_name=~\"$cluster\", service_name=~\"$service\"}[$__auto]))"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "logs",
+      "title": "Logs",
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 16
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "${ds_logs}"
+      },
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "enableLogDetails": true,
+        "sortOrder": "Descending"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{k8s_namespace_name=~\"$namespace\", k8s_cluster_name=~\"$cluster\", service_name=~\"$service\"}"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "table",
+      "title": "Recent traces",
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 26
+      },
+      "datasource": {
+        "type": "tempo",
+        "uid": "${ds_traces}"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "traceql",
+          "query": "{ resource.service.name =~ \"$service\" }",
+          "limit": 20,
+          "tableType": "traces"
+        }
+      ]
+    }
+  ]
+}

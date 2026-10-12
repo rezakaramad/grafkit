@@ -1,0 +1,91 @@
+name: Validate and Publish Dashboards
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "dashboards/**"
+  pull_request:
+    paths:
+      - "dashboards/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  REGISTRY: ghcr.io
+
+concurrency:
+  group: dashboards-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    outputs:
+      dashboards: ${{ steps.list.outputs.dashboards }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: List dashboards
+        id: list
+        run: |
+          list=$(find dashboards -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort | jq -R -s -c 'split("\n") | map(select(length > 0))')
+          echo "dashboards=$list" >> "$GITHUB_OUTPUT"
+
+      - name: Validate dashboards
+        run: |
+          set -euo pipefail
+          status=0
+          for dir in dashboards/*/; do
+            name=$(basename "$dir")
+            file="$dir$name.json"
+            if [ ! -f "$file" ]; then
+              echo "::error::$dir must contain $name.json"; status=1; continue
+            fi
+            jq empty "$file" || { echo "::error::$file is not valid JSON"; status=1; continue; }
+            # Datasources must be variables so the dashboard works on any Grafana.
+            if jq -e '[.. | objects | select(has("type") and has("uid")) | .uid | select((type == "string") and (startswith("${") | not) and . != "-- Grafana --")] | length > 0' "$file" >/dev/null; then
+              echo "::error::$file has a hardcoded datasource uid; use a datasource variable"; status=1
+            fi
+          done
+          exit $status
+
+  publish:
+    name: "Publish: ${{ matrix.dashboard }}"
+    needs: validate
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        dashboard: ${{ fromJson(needs.validate.outputs.dashboards) }}
+      fail-fast: false
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ORAS pushes plain files (here, a dashboard JSON) to an OCI registry
+      # https://oras.land/docs/
+      - name: Set up ORAS
+        uses: oras-project/setup-oras@v1
+
+      - name: Log in to GHCR
+        env:
+          ACTOR: ${{ github.actor }}
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "$TOKEN" | oras login "$REGISTRY" -u "$ACTOR" --password-stdin
+
+      - name: Push
+        env:
+          NAME: ${{ matrix.dashboard }}
+        run: |
+          set -euo pipefail
+          repo="${GITHUB_REPOSITORY,,}"
+          cd "dashboards/$NAME"
+          oras push "$REGISTRY/$repo/$NAME:sha-${GITHUB_SHA::7},latest" "$NAME.json:application/json"
